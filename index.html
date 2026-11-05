@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>سجل الحضور والغياب</title>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f3f6f4;--surface:#fff;--text:#16302b;--muted:#5d7570;--line:#d9e3df;--main:#0f6b5c;--present:#1e8a4c;--absent:#c8433a;--present-bg:#e2f4ea;--absent-bg:#fbe7e5;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1a18;--surface:#172623;--text:#e6f1ee;--muted:#93aca6;--line:#2a3f3b;--main:#3fb39e;--present:#5fd08a;--absent:#f08278;--present-bg:#173a2a;--absent-bg:#432320;color-scheme:dark}}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--text);font-family:'Cairo',Tahoma,Arial,sans-serif;line-height:1.6}
+.wrap{max-width:820px;margin:0 auto;padding:16px}
+h1{font-size:1.4rem;margin:8px 0 14px}
+nav{display:flex;gap:6px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:5px;margin-bottom:16px}
+nav button{flex:1;border:0;background:none;padding:10px;border-radius:8px;font:inherit;font-weight:600;color:var(--muted);cursor:pointer}
+nav button.on{background:var(--main);color:#fff}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--main);outline-offset:2px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:14px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px;text-align:center}
+.stat b{display:block;font-size:2rem;line-height:1.2}
+.stat span{color:var(--muted);font-size:.9rem}
+.stat.p b{color:var(--present)}.stat.a b{color:var(--absent)}
+input,select{font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--text);max-width:100%}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.row input[type=text]{flex:1;min-width:140px}
+.btn{border:0;background:var(--main);color:#fff;font:inherit;font-weight:600;padding:10px 16px;border-radius:8px;cursor:pointer}
+.btn.ghost{background:none;color:var(--muted);border:1px solid var(--line)}
+.stu{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-top:1px solid var(--line)}
+.stu:first-of-type{border-top:0}
+.tog{display:flex;gap:6px}
+.tog button{border:1px solid var(--line);background:none;font:inherit;padding:6px 14px;border-radius:8px;cursor:pointer;color:var(--muted)}
+.tog button.p.on{background:var(--present-bg);color:var(--present);border-color:var(--present);font-weight:700}
+.tog button.a.on{background:var(--absent-bg);color:var(--absent);border-color:var(--absent);font-weight:700}
+.x{border:0;background:none;color:var(--muted);cursor:pointer;font-size:1.1rem}
+.tag{padding:2px 10px;border-radius:99px;font-size:.85rem;font-weight:600}
+.tag.p{background:var(--present-bg);color:var(--present)}.tag.a{background:var(--absent-bg);color:var(--absent)}
+.empty{color:var(--muted);text-align:center;padding:20px 0}
+.scroll{overflow-x:auto}
+.bar{height:8px;border-radius:8px;background:var(--absent-bg);overflow:hidden;min-width:90px}
+.bar i{display:block;height:100%;background:var(--present)}
+.hide{display:none}
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body>
+<div class="wrap">
+<h1>سجل الحضور والغياب</h1>
+<nav id="nav">
+<button data-t="att" class="on">تسجيل الحضور</button>
+<button data-t="rec">سجل الطالب</button>
+<button data-t="dash">لوحة المعلومات</button>
+<button data-t="stu">الطلاب</button>
+</nav>
+
+<section id="att">
+<div class="panel">
+<div class="row"><label for="d">التاريخ:</label><input type="date" id="d">
+<button class="btn ghost" id="allP">الكل حاضر</button></div>
+<div id="attList"></div>
+</div>
+</section>
+
+<section id="rec" class="hide">
+<div class="panel">
+<div class="row"><label for="sel">الطالب:</label><select id="sel"></select></div>
+<div id="recOut"></div>
+</div>
+</section>
+
+<section id="dash" class="hide">
+<div class="row"><label for="dd">اليوم:</label><input type="date" id="dd"><button class="btn" id="xl" style="margin-inline-start:auto">تصدير Excel</button><span id="xlMsg" style="color:var(--muted);font-size:.9rem"></span></div>
+<div class="stats" id="stats"></div>
+<div class="panel" style="margin-top:14px"><b>نسبة الحضور لكل طالب (كل الأيام)</b><div id="rank" class="scroll"></div></div>
+</section>
+
+<section id="stu" class="hide">
+<div class="panel">
+<div class="row"><input type="text" id="nm" placeholder="اسم الطالب"><button class="btn" id="add">إضافة طالب</button></div>
+<div id="stuList"></div>
+</div>
+</section>
+</div>
+
+<script>
+var K='att_app_v1',db={students:[],log:{}};
+try{var s=localStorage.getItem(K);if(s)db=JSON.parse(s)}catch(e){}
+function save(){try{localStorage.setItem(K,JSON.stringify(db))}catch(e){}}
+function uid(){return 's'+Date.now().toString(36)+Math.random().toString(36).slice(2,5)}
+function today(){var t=new Date();return t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0')}
+function esc(x){return x.replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+function fmt(d){try{return new Date(d+'T00:00:00').toLocaleDateString('ar-EG',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}catch(e){return d}}
+var $=function(i){return document.getElementById(i)};
+$('d').value=today();$('dd').value=today();
+
+document.querySelectorAll('#nav button').forEach(function(b){b.onclick=function(){
+document.querySelectorAll('#nav button').forEach(function(x){x.classList.toggle('on',x===b)});
+['att','rec','dash','stu'].forEach(function(t){$(t).classList.toggle('hide',t!==b.dataset.t)});render()}});
+
+function setSt(id,st){var d=$('d').value;db.log[d]=db.log[d]||{};
+db.log[d][id]=(db.log[d][id]===st)?undefined:st;if(db.log[d][id]===undefined)delete db.log[d][id];save();renderAtt()}
+function renderAtt(){var d=$('d').value,l=db.log[d]||{},h='';
+if(!db.students.length){$('attList').innerHTML='<div class="empty">أضف الطلاب أولاً من تبويب «الطلاب».</div>';return}
+db.students.forEach(function(s){var v=l[s.id];
+h+='<div class="stu"><span>'+esc(s.name)+'</span><div class="tog"><button class="p '+(v==='p'?'on':'')+'" onclick="setSt(\''+s.id+'\',\'p\')">حاضر</button><button class="a '+(v==='a'?'on':'')+'" onclick="setSt(\''+s.id+'\',\'a\')">غائب</button></div></div>'});
+$('attList').innerHTML=h}
+$('d').onchange=renderAtt;
+$('allP').onclick=function(){var d=$('d').value;db.log[d]=db.log[d]||{};db.students.forEach(function(s){db.log[d][s.id]='p'});save();renderAtt()};
+
+function stats(sid){var p=0,a=0,days=[];Object.keys(db.log).sort().reverse().forEach(function(d){var v=db.log[d][sid];if(v){days.push([d,v]);v==='p'?p++:a++}});return{p:p,a:a,days:days}}
+function renderRec(){var cur=$('sel').value;
+$('sel').innerHTML=db.students.map(function(s){return'<option value="'+s.id+'">'+esc(s.name)+'</option>'}).join('');
+if(!db.students.length){$('recOut').innerHTML='<div class="empty">لا يوجد طلاب بعد.</div>';return}
+if(cur&&db.students.some(function(s){return s.id===cur}))$('sel').value=cur;
+var st=stats($('sel').value),h='<div class="row"><span class="tag p">حضور: '+st.p+'</span><span class="tag a">غياب: '+st.a+'</span></div>';
+if(!st.days.length)h+='<div class="empty">لا يوجد سجل لهذا الطالب.</div>';
+st.days.forEach(function(x){h+='<div class="stu"><span>'+fmt(x[0])+'</span><span class="tag '+x[1]+'">'+(x[1]==='p'?'حاضر':'غائب')+'</span></div>'});
+$('recOut').innerHTML=h}
+$('sel').onchange=renderRec;
+
+function renderDash(){var d=$('dd').value,l=db.log[d]||{},p=0,a=0;
+Object.keys(l).forEach(function(k){if(db.students.some(function(s){return s.id===k}))l[k]==='p'?p++:a++});
+$('stats').innerHTML='<div class="stat"><b>'+db.students.length+'</b><span>إجمالي الطلاب</span></div><div class="stat p"><b>'+p+'</b><span>حضور</span></div><div class="stat a"><b>'+a+'</b><span>غياب</span></div>';
+var h='';db.students.forEach(function(s){var t=stats(s.id),n=t.p+t.a,pc=n?Math.round(t.p*100/n):0;
+h+='<div class="stu"><span style="flex:1">'+esc(s.name)+'</span><div class="bar" style="flex:1"><i style="width:'+pc+'%"></i></div><span style="width:48px;text-align:left">'+(n?pc+'%':'—')+'</span></div>'});
+$('rank').innerHTML=h||'<div class="empty">لا يوجد طلاب بعد.</div>'}
+$('dd').onchange=renderDash;
+
+function renderStu(){var h='';db.students.forEach(function(s){h+='<div class="stu"><span>'+esc(s.name)+'</span><button class="x" aria-label="حذف" onclick="delStu(\''+s.id+'\')">✕</button></div>'});
+$('stuList').innerHTML=h||'<div class="empty">لم تُضف أي طالب بعد.</div>'}
+function addStu(){var n=$('nm').value.trim();if(!n)return;db.students.push({id:uid(),name:n});$('nm').value='';save();renderStu()}
+$('add').onclick=addStu;$('nm').onkeydown=function(e){if(e.key==='Enter')addStu()};
+function delStu(id){if(!confirm('حذف الطالب وسجله بالكامل؟'))return;db.students=db.students.filter(function(s){return s.id!==id});
+Object.keys(db.log).forEach(function(d){delete db.log[d][id]});save();renderStu()}
+
+function exportXlsx(){var m=$('xlMsg');m.textContent='';
+try{
+if(!window.XLSX){m.textContent='تعذر تحميل مكتبة Excel.';return}
+if(!db.students.length){m.textContent='لا يوجد طلاب لتصديرهم.';return}
+var dates=Object.keys(db.log).filter(function(d){return Object.keys(db.log[d]).length}).sort();
+var sum=[['الطالب','أيام الحضور','أيام الغياب','نسبة الحضور %']];
+var mat=[['الطالب'].concat(dates)];
+db.students.forEach(function(s){var t=stats(s.id),n=t.p+t.a;
+sum.push([s.name,t.p,t.a,n?Math.round(t.p*100/n):0]);
+mat.push([s.name].concat(dates.map(function(d){var v=(db.log[d]||{})[s.id];return v==='p'?'حاضر':v==='a'?'غائب':''})))});
+var wb=XLSX.utils.book_new();
+var w1=XLSX.utils.aoa_to_sheet(sum),w2=XLSX.utils.aoa_to_sheet(mat);
+w1['!cols']=[{wch:24},{wch:12},{wch:12},{wch:14}];
+w2['!cols']=[{wch:24}].concat(dates.map(function(){return{wch:12}}));
+XLSX.utils.book_append_sheet(wb,w1,'ملخص');
+XLSX.utils.book_append_sheet(wb,w2,'سجل الحضور');
+wb.Workbook={Views:[{RTL:true}]};
+XLSX.writeFile(wb,'سجل-الحضور-'+today()+'.xlsx');
+m.textContent='تم التصدير.';
+}catch(e){m.textContent='تعذر التصدير.'}}
+$('xl').onclick=exportXlsx;
+
+function render(){renderAtt();renderRec();renderDash();renderStu()}
+render();
+</script>
+</body>
+</html>
